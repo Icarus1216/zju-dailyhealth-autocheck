@@ -1,3 +1,6 @@
+
+#coding:utf-8
+from operator import le
 import requests
 import re
 import json
@@ -9,7 +12,8 @@ from notify.tgpush import post_tg
 from notify.Dingpush import dingpush
 from utils import verify
 
-#签到程序模块
+
+# 签到程序模块
 class LoginError(Exception):
     """Login Exception"""
     pass
@@ -35,7 +39,7 @@ def take_out_json(content):
 
 def get_date():
     """Get current date"""
-    today = datetime.date.today() 
+    today = datetime.date.today()
     return "%4d%02d%02d" % (today.year, today.month, today.day)
 
 
@@ -58,15 +62,21 @@ class ZJULogin(object):
         self.imgaddress = 'https://healthreport.zju.edu.cn/ncov/wap/default/code'
         self.BASE_URL = "https://healthreport.zju.edu.cn/ncov/wap/default/index"
         self.LOGIN_URL = "https://zjuam.zju.edu.cn/cas/login?service=http%3A%2F%2Fservice.zju.edu.cn%2F"
-        
-        self.TG_TOKEN = os.getenv("TG_TOKEN")	#TG机器人的TOKEN
-        self.CHAT_ID = os.getenv("CHAT_ID")	    #推送消息的CHAT_ID
+
+        self.TG_TOKEN = os.getenv("TG_TOKEN")  # TG机器人的TOKEN
+        self.CHAT_ID = os.getenv("CHAT_ID")  # 推送消息的CHAT_ID
         self.DD_BOT_TOKEN = os.getenv("DD_BOT_TOKEN")
-        self.DD_BOT_SECRET=os.getenv("DD_BOT_SECRET") #哈希算法验证(可选)
+        self.DD_BOT_SECRET = os.getenv("DD_BOT_SECRET")  # 哈希算法验证(可选)
         self.reminders = os.getenv("REMINDERS")
 
-        self.lng= os.getenv("lng")
-        self.lat= os.getenv("lat")
+        '''
+        INPUT YOUR OWN lng（经度） and lat（纬度）
+        '''
+
+        self.lng = '120.084573'
+        self.lat = '30.307314'
+
+        assert len(self.lng) != 0 and len(self.lat) != 0
 
     def login(self):
         """Login to ZJU platform"""
@@ -160,7 +170,9 @@ class HealthCheckInHelper(ZJULogin):
     def take_in(self, geo_info: dict):
         formatted_address = geo_info.get("regeocode").get("formatted_address")
         address_component = geo_info.get("regeocode").get("addressComponent")
-        if not formatted_address or not address_component: return
+        if not formatted_address or not address_component:
+            print('No Such Componets')
+            return
 
         # 获得id和uid参数
         time.sleep(3)
@@ -170,13 +182,13 @@ class HealthCheckInHelper(ZJULogin):
             self.Push('网页获取失败，请检查网络并重试')
         html = res.content.decode()
         try:
-            done = re.findall('温馨提示： 不外出、不聚集、不吃野味， 戴口罩、勤洗手、咳嗽有礼，开窗通风，发热就诊',html)[0]
+            done = re.findall('温馨提示： 不外出、不聚集、不吃野味， 戴口罩、勤洗手、咳嗽有礼，开窗通风，发热就诊', html)[0]
             print(done)
             try:
                 res = self.sess.get(self.imgaddress, headers=self.headers)
                 code_get = verify.getcode(res.content)
                 code = code_get.main()
-                if not code :
+                if not code:
                     self.Push('验证码识别失败，请重试')
                     return
                 else:
@@ -192,17 +204,18 @@ class HealthCheckInHelper(ZJULogin):
             new_uid = new_info_tmp['uid']
             # 拼凑geo信息
             lng, lat = address_component.get("streetNumber").get("location").split(",")
-            geo_api_info_dict = {"type": "complete", "info": "SUCCESS", "status": 1, 
-                                "position": {"Q": lat, "R": lng, "lng": lng, "lat": lat},
-                                "message": "Get geolocation success.Convert Success.Get address success.", "location_type": "ip",
-                                "accuracy": "null", "isConverted": "true", "addressComponent": address_component,
-                                "formattedAddress": formatted_address, "roads": [], "crosses": [], "pois": []}
-            #print('打卡地点：', formatted_address)
-            #拿到校验值
-            verify_data = re.findall(r'"([a-z0-9]*?)": "([0-9]*?)","([a-z0-9]*?)":"([a-z0-9]*?)"',html)[0]
+            geo_api_info_dict = {"type": "complete", "info": "SUCCESS", "status": 1,
+                                 "position": {"Q": lat, "R": lng, "lng": lng, "lat": lat},
+                                 "message": "Get geolocation success.Convert Success.Get address success.",
+                                 "location_type": "ip",
+                                 "accuracy": "null", "isConverted": "true", "addressComponent": address_component,
+                                 "formattedAddress": formatted_address, "roads": [], "crosses": [], "pois": []}
+            print('打卡地点：', formatted_address)
+            # 拿到校验值
+            verify_data = re.findall(r'"([a-z0-9]*?)": "([0-9]*?)","([a-z0-9]*?)":"([a-z0-9]*?)"', html)[0]
             verify_code = {
-                verify_data[0]:verify_data[1],
-                verify_data[2]:verify_data[3],
+                verify_data[0]: verify_data[1],
+                verify_data[2]: verify_data[3],
             }
             data = {
                 'sfymqjczrj': '0',
@@ -232,7 +245,7 @@ class HealthCheckInHelper(ZJULogin):
                 'sfyxjzxgym': '1',
                 # 是否不宜接种人群
                 'sfbyjzrq': '5',
-                'jzxgymqk': '6', # 这里是第三针相关参数，1是已接种第一针，4是已接种第二针（已满6个月），5是已接种第二针（未满6个月），6是已接种第三针，3是未接种，记得自己改
+                'jzxgymqk': '6',  # 这里是第三针相关参数，1是已接种第一针，4是已接种第二针（已满6个月），5是已接种第二针（未满6个月），6是已接种第三针，3是未接种，记得自己改
                 'tw': '0',
                 'sfcxtz': '0',
                 'sfjcbh': '0',
@@ -248,7 +261,7 @@ class HealthCheckInHelper(ZJULogin):
                 # 浙江省 杭州市 西湖区
                 # '\u6D59\u6C5F\u7701 \u676D\u5DDE\u5E02 \u897F\u6E56\u533A'
                 'area': "{} {} {}".format(address_component.get("province"), address_component.get("city"),
-                                        address_component.get("district")),
+                                          address_component.get("district")),
                 # 浙江省
                 # '\u6D59\u6C5F\u7701'
                 'province': address_component.get("province"),
@@ -256,7 +269,7 @@ class HealthCheckInHelper(ZJULogin):
                 # '\u676D\u5DDE\u5E02'
                 'city': address_component.get("city"),
                 # 是否在校：在校将'sfzx'改为1
-                'sfzx': '1', 
+                'sfzx': '1',
                 'sfjcwhry': '0',
                 'sfjchbry': '0',
                 'sfcyglq': '0',
@@ -264,11 +277,11 @@ class HealthCheckInHelper(ZJULogin):
                 'glksrq': '',
                 'jcbhlx': '',
                 'jcbhrq': '',
-                'bztcyy': '4', 
+                'bztcyy': '4',
                 'sftjhb': '0',
                 'sftjwh': '0',
-                'fjsj':	'0',
-                'sfjcqz': '', 
+                'fjsj': '0',
+                'sfjcqz': '',
                 'jcqzrq': '',
                 'jrsfqzys': '',
                 'jrsfqzfy': '',
@@ -282,7 +295,7 @@ class HealthCheckInHelper(ZJULogin):
                 'fxyy': '',
                 'jcjg': '',
                 # uid每个用户不一致
-                'uid': new_uid,     
+                'uid': new_uid,
                 # id每个用户不一致
                 'id': new_id,
                 # 日期
@@ -293,43 +306,44 @@ class HealthCheckInHelper(ZJULogin):
                 'gtjzzfjsj': '',
                 'gwszdd': '',
                 'szgjcs': '',
-                'ismoved': '0', # 位置变化为1，不变为0
-                'zgfx14rfhsj':'',
+                'ismoved': '0',  # 位置变化为1，不变为0
+                'zgfx14rfhsj': '',
                 'jrdqjcqk': '',
-                'jcwhryfs': '',	
-                'jchbryfs': '',	
-                'xjzd': '',	
-                'sfsfbh':'0',
-                'jhfjrq':'',	
-                'jhfjjtgj':'',	
-                'jhfjhbcc':'',	
-                'jhfjsftjwh':'0',
-                'jhfjsftjhb':'0',
-                'szsqsfybl':'0',
-                'gwszgz':'',
-                'campus': '紫金港校区', # 紫金港校区 玉泉校区 西溪校区 华家池校区 之江校区 海宁校区 舟山校区 宁波校区 工程师学院 杭州国际科创中心 其他
+                'jcwhryfs': '',
+                'jchbryfs': '',
+                'xjzd': '',
+                'sfsfbh': '0',
+                'jhfjrq': '',
+                'jhfjjtgj': '',
+                'jhfjhbcc': '',
+                'jhfjsftjwh': '0',
+                'jhfjsftjhb': '0',
+                'szsqsfybl': '0',
+                'gwszgz': '',
+                'campus': '紫金港校区',  # 紫金港校区 玉泉校区 西溪校区 华家池校区 之江校区 海宁校区 舟山校区 宁波校区 工程师学院 杭州国际科创中心 其他
                 # 👇-----2022.5.7日修改-----👇
                 'verifyCode': code,
                 # 👆-----2022.5.7日修改-----👆
             }
             data.update(verify_code)
             response = self.sess.post('https://healthreport.zju.edu.cn/ncov/wap/default/save', data=data,
-                                    headers=self.headers)
+                                      headers=self.headers)
             return response.json()
 
-    def Push(self,res):
+    def Push(self, res):
         if not res:
-            if self.CHAT_ID and self.TG_TOKEN :
-                post_tg('浙江大学每日健康打卡 V3.0 '+ f" \n\n 签到结果:{res}", self.CHAT_ID, self.TG_TOKEN) 
+            print(f'INFO: {res}')
+            if self.CHAT_ID and self.TG_TOKEN:
+                post_tg('浙江大学每日健康打卡 V3.0 ' + f" \n\n 签到结果:{res}", self.CHAT_ID, self.TG_TOKEN)
             else:
                 print("telegram推送未配置,请自行查看签到结果")
             if self.DD_BOT_TOKEN:
-                ding= dingpush('浙江大学每日健康打卡 V3.0 ', res,self.reminders,self.DD_BOT_TOKEN,self.DD_BOT_SECRET)
+                ding = dingpush('浙江大学每日健康打卡 V3.0 ', res, self.reminders, self.DD_BOT_TOKEN, self.DD_BOT_SECRET)
                 ding.SelectAndPush()
             else:
                 print("钉钉推送未配置，请自行查看签到结果")
             print("推送完成！")
-        
+
     def run(self):
         print("正在为{}健康打卡".format(self.username))
         if self.delay_run:
@@ -339,7 +353,7 @@ class HealthCheckInHelper(ZJULogin):
             self.login()
             # 拿取eai-sess的cookies信息
             self.sess.get(self.REDIRECT_URL)
-            # location = get_ip_location()
+            # location = self.get_ip_location()
             # print(location)
             location = {'info': 'LOCATE_SUCCESS', 'status': 1, 'lng': self.lng, 'lat': self.lat}
             geo_info = self.get_geo_info(location)
@@ -347,15 +361,25 @@ class HealthCheckInHelper(ZJULogin):
             res = self.take_in(geo_info)
             print(res)
             self.Push(res)
-        except requests.exceptions.ConnectionError :
+        except requests.exceptions.ConnectionError:
             # reraise as KubeException, but log stacktrace.
             print("打卡失败,请检查github服务器网络状态")
             self.Push('打卡失败,请检查github服务器网络状态')
-                
+
+
 if __name__ == '__main__':
-    # 因为是github action版本，所以不加上循环多人打卡功能   
-    account = os.getenv("account")
-    password = os.getenv("password")
-    s = HealthCheckInHelper(account, password, delay_run=True)
-    s.run() 
- 
+    '''
+    Account: 学号
+    PassWord：密码
+    '''
+    account = ""
+    password = ""
+
+    assert len(account) != 0 and len(password) != 0
+
+    s = HealthCheckInHelper(account, password, delay_run=False)
+    s.run()
+
+
+
+
